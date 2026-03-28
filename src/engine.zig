@@ -49,17 +49,17 @@ pub const UniformFunction = union {
 
 pub const Uniform = struct {
     location: c_int,
-    function: UniformFunction,
+    function: ?UniformFunction,
 
     fn applyOwned(self: *const Uniform, owner: *anyopaque) void {
-        self.function.owned(owner, self.location);
+        self.function.?.owned(owner, self.location);
     }
 
     fn apply(self: *const Uniform) void {
-        self.function.basic(self.location);
+        self.function.?.basic(self.location);
     }
 
-    fn init(location: c_int, function: UniformFunction) Uniform {
+    fn init(location: c_int, function: ?UniformFunction) Uniform {
         return Uniform{ .location = location, .function = function };
     }
 };
@@ -380,6 +380,10 @@ fn glfwGlobalFrameBufferSizeCallback(_: *glfw.Window, width: c_int, height: c_in
     }
 }
 
+pub fn glfwSetCursorPosCallback(callback: *const fn (*c_long, f64, f64) callconv(.c) void) void {
+    _ = glfw.setCursorPosCallback(window.id, callback);
+}
+
 var procs: gl.ProcTable = undefined;
 
 pub fn init(allocator: std.mem.Allocator, window_width: c_int, window_height: c_int, name: [*:0]const u8) !void {
@@ -398,6 +402,8 @@ pub fn init(allocator: std.mem.Allocator, window_width: c_int, window_height: c_
     window.makeCurrent();
 
     _ = glfw.setFramebufferSizeCallback(window.id, glfwGlobalFrameBufferSizeCallback);
+
+    glfw.setInputMode(window.id, glfw.Cursor, glfw.CursorDisabled);
 
     // Bind GL Procs
     if (!procs.init(glfw.getProcAddress)) return error.InitError;

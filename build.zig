@@ -28,6 +28,12 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("glfw");
     exe.root_module.addImport("glfw", zglfw.module("glfw"));
 
+    const zm = b.dependency("zm", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.root_module.addImport("zm", zm.module("zm"));
+
     b.installArtifact(exe);
 
     const run_step = b.step("run", "Run the app");

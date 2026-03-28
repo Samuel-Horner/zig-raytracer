@@ -12,6 +12,10 @@
             .url = "git+https://github.com/IridescenceTech/zglfw.git#188d33b5abdb24768905dec1dad6b3ffd60fc324",
             .hash = "zglfw-0.1.0-BghZXaTUAAAkCOlD_2akK4k1zIzo6HIXelVZu39yr_MO",
         },
+        .zm = .{
+            .url = "git+https://github.com/griush/zm#019dfc79378eb3c1314f0e7a999f9102dd59bd51",
+            .hash = "zm-0.5.0-cLX-WXTdAACNTDbatSmwFKqWLzOJ62VFD_KMmFaH8HQT",
+        },
     },
     .paths = .{
         "build.zig",
