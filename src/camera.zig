@@ -66,8 +66,6 @@ pub const Camera = struct {
         self.right = self.dir.crossLH(m.vec3(0, 1, 0)).norm();
         self.up = self.right.crossLH(self.dir).norm();
 
-        debug.log("{}", .{self.dir});
-            
         self.update();
     }
 

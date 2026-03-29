@@ -7,6 +7,7 @@ const engine = @import("engine.zig");
 const debug = @import("debug.zig");
 const Camera = @import("camera.zig").Camera;
 const m = @import("math.zig");
+const voxel = @import("voxel.zig");
 
 var output_texture: engine.Texture = undefined;
 
@@ -49,6 +50,16 @@ pub fn main() !void {
     defer if (gpa.deinit() == .leak) {
         debug.err("GPA detected memory leaks when deinit-ing.", .{});
     };
+
+    const Tree = try voxel.KDTree(4);
+    var tree: Tree = try Tree.init(gpa.allocator(), m.ivec3(0, 0, 0), 16);
+    defer tree.deinit();
+
+    debug.log("{any}", .{tree.store});
+
+    try tree.add(m.ivec3(8, 8, 8), voxel.filled);
+
+    debug.log("{any}", .{tree.store});
 
     try engine.init(gpa.allocator(), 800, 460, "Hello World");
     defer engine.deinit();
