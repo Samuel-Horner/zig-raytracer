@@ -55,4 +55,16 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_exe_tests.step);
+
+    const render_doc_step = b.step("renderdoc", "Runs the app in renderdoc");
+    render_doc_step.dependOn(b.getInstallStep());
+
+    const render_doc_cmd = b.addSystemCommand(&.{ "renderdoccmd", "capture" });
+    render_doc_cmd.addFileArg(exe.getEmittedBin());
+
+    if (b.args) |args| {
+        render_doc_cmd.addArgs(args);
+    }
+
+    render_doc_step.dependOn(&render_doc_cmd.step);
 }

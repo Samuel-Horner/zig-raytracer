@@ -142,6 +142,28 @@ pub const Texture = struct {
     }
 };
 
+pub const SSBO = struct {
+    ssbo: c_uint,
+    length: usize,
+
+    pub fn bind(ssbo: *const SSBO, bind_point: c_uint) void {
+        gl.BindBufferBase(gl.SHADER_STORAGE_BUFFER, bind_point, ssbo.ssbo);
+    }
+
+    pub fn init(comptime value_type: type, values: []value_type) SSBO {
+        var ssbo: SSBO = undefined;
+
+        gl.GenBuffers(1, (&ssbo.ssbo)[0..1]);
+        gl.BindBuffer(gl.SHADER_STORAGE_BUFFER, ssbo.ssbo);
+        
+        gl.BufferData(gl.SHADER_STORAGE_BUFFER, @intCast(values.len * @sizeOf(value_type)), values.ptr, gl.STATIC_DRAW);
+
+        ssbo.length = values.len;
+
+        return ssbo;
+    }
+};
+
 pub const ComputeProgram = struct {
     id: c_uint,
     uniforms: std.ArrayList(Uniform),

@@ -72,7 +72,7 @@ pub const Camera = struct {
     pub fn tick(self: *Camera, delta_time: f32) void {
         const forward = m.vec3(- self.dir.data[0], 0, - self.dir.data[2]);
         var movement = m.vec3(0, 0, 0);
-        var speed: f32 = 1.0;
+        var speed: f32 = 10.0;
 
         if (engine.window.keyPressed(glfw.KeyW)) {
             movement.addAssign(forward);
@@ -99,7 +99,7 @@ pub const Camera = struct {
         }
 
         if (engine.window.keyPressed(glfw.KeyLeftShift)) {
-            speed = 10;
+            speed *= 5;
         }
 
         movement.scaleAssign(speed * delta_time);

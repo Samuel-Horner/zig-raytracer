@@ -51,22 +51,10 @@ pub fn main() !void {
         debug.err("GPA detected memory leaks when deinit-ing.", .{});
     };
 
-    const Tree = try voxel.KDTree(4);
-    var tree: Tree = try Tree.init(gpa.allocator(), m.ivec3(0, 0, 0), 16);
-    defer tree.deinit();
-
-    debug.log("{any}", .{tree.store});
-
-    try tree.add(m.ivec3(8, 8, 8), voxel.filled);
-
-    debug.log("{any}", .{tree.store});
-
-    debug.log("{any}", .{tree.get(m.ivec3(8, 8, 8))});
-    debug.log("{any}", .{tree.get(m.ivec3(8, 8, 9))});
-
     try engine.init(gpa.allocator(), 800, 460, "Hello World");
     defer engine.deinit();
 
+    // Init Renderers
     var quad_renderer = try engine.QuadRenderer.init(@embedFile("shader/quad_vert.glsl"), @embedFile("shader/quad_frag.glsl"));
     defer quad_renderer.deinit();
 
@@ -85,6 +73,37 @@ pub fn main() !void {
     const output_texture_uniform = try quad_renderer.program.registerUniform("tex", .{ .owned = engine.Texture.apply });
     quad_renderer.program.applyOwnedUniform(output_texture_uniform, &output_texture);
 
+    // Init World
+    const world_size: u32 = 16;
+    const world_root = -@as(i32, @intCast(world_size)) / 2;
+    const Tree = voxel.KDTree(2);
+    var world: Tree = try Tree.init(gpa.allocator(), m.ivec3(world_root, world_root, world_root), world_size);
+    defer world.deinit();
+
+    for (0..world_size) |x| {
+        for (0..world_size) |y| {
+            for (0..world_size) |z| {
+                const voxel_pos = m.ivec3(world_root + @as(i32, @intCast(x)), world_root + @as(i32, @intCast(y)), world_root + @as(i32, @intCast(z)));
+
+                if (@mod(x + y + z, 2) == 0) {
+                    try world.add(voxel_pos, voxel.Voxel.init(
+                        @intCast(x * @divFloor(256, world_size)),
+                        @intCast(y * @divFloor(256, world_size)),
+                        @intCast(z * @divFloor(256, world_size)),
+                    ));
+                }
+            }
+        }
+    }
+
+    debug.log("{any}", .{world.get(m.ivec3(-2, -2, -2))});
+    debug.log("{any}", .{@as(u32, @bitCast(try world.get(m.ivec3(-2, -2, -2))))});
+
+    const world_ssbo = engine.SSBO.init(u32, world.store.items);
+    compute_program.use();
+    world_ssbo.bind(0);
+
+    // Init Player Camera
     camera = Camera.init(m.vec3(0, 0, 0), .{});
     try camera.registerUniforms(engine.ComputeProgram, &compute_program);
     camera.applyUniforms(engine.ComputeProgram, &compute_program);
