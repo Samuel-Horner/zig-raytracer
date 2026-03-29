@@ -16,41 +16,12 @@ float distanceSquared(vec3 a, vec3 b) {
 ivec3 uvec3_ivec3(uvec3 x) {
     return ivec3(int(x.x), int(x.y), int(x.z));
 }
+uvec3 ivec3_uvec3(ivec3 x) {
+    return uvec3(uint(x.x), uint(x.y), uint(x.z));
+}
 
 #define divisions 2
 #define child_count divisions * divisions * divisions
-
-// https://www.geeksforgeeks.org/c/quick-sort-in-c/
-void swap(inout float a, inout float b) {
-    float t = a;
-    a = b;
-    b = a;
-}
-
-uint part(inout float arr[child_count], uint low, uint high) {
-    float p = arr[low];
-    uint i = low;
-    uint j = high;
-
-    while (i < j) {
-        while (arr[i] <= p && i < j) i++;
-        while (arr[j] > p && j > i) j++;
-
-        if (i < j) swap(arr[i], arr[j]);
-    }
-
-    swap(arr[low], arr[high]);
-    return j;
-}
-
-void sort(inout float arr[child_count], uint low, uint high) {
-    if (low < high) {
-        uint pi = part(arr, low, high);
-
-        sort(arr, low, pi - 1);
-        sort(arr, pi + 1, high);
-    }
-}
 
 struct MetaData {
     ivec3 pos;
@@ -109,29 +80,10 @@ vec3 at(Ray ray, float t) {
     return ray.origin + t * ray.dir;
 }
 
-struct StackItem {
-    uint node_ptr;
-    float t;
-};
-
-#define MAX_TRAVERSAL_STACK_SIZE 4096
-struct Stack {
-    StackItem items;
-    uint top;
-};
-
-void stackPush(in Stack stack, StackEntry item) {
-    stack.items[stack.top++] = item;
-}
-
-StackItem stackPop(in Stack stack) {
-    return stack.items[--stack.top];
-}
-
 // https://gist.github.com/DomNomNom/46bb1ce47f68d255fd5d
 // compute the near and far intersections of the cube (stored in the x and y components) using the slab method
 // no intersection means vec.x > vec.y (really tNear > tFar)
-float hitAABB(Ray ray, vec3 vmin, float size) {
+vec2 hitAABB(Ray ray, vec3 vmin, float size) {
     vec3 vmax = vmin + vec3(size);
     vec3 tmin = (vmin - ray.origin) * ray.invdir;
     vec3 tmax = (vmax - ray.origin) * ray.invdir;
@@ -140,18 +92,18 @@ float hitAABB(Ray ray, vec3 vmin, float size) {
     float tnear = max(max(t1.x, t1.y), t1.z);
     float tfar = min(min(t2.x, t2.y), t2.z);
 
-    if (tnear >= 0 && tnear <= tfar) {
-        return tnear;
+    if (tnear > 0 && tfar - tnear > 0) {
+        return vec2(tnear, tfar);
     } else {
-        return -1;
+        return vec2(-1.);
     }
 }
 
-#define INVALID_INDEX 0xFFFFFF
+#define MAX_32 0xFFFFFF
 
 uint findClosestIntersectionIndex(Ray ray, ivec3 parent_pos, uint size, uint children_ptr) {
     uint division_size = size / divisions;
-    float hit_dists[child_count];
+    vec2 hit_dists[child_count];
 
     for (uint i = 0; i < child_count; i++) {
         uvec3 relative_pos = getRelativePos(i);
@@ -160,14 +112,12 @@ uint findClosestIntersectionIndex(Ray ray, ivec3 parent_pos, uint size, uint chi
         hit_dists[i] = hitAABB(ray, node_pos, division_size);
     }
 
-    sort(hit_dists, 0, child_count - 1);
-
     // Return minimum distance index
     uint index = 0;
     float min_dist = -1;
 
     for (uint i = 0; i < divisions * divisions * divisions; i++) {
-        float dist = hit_dists[i];
+        float dist = hit_dists[i].x;
         if (dist < 0) continue;
 
         if ((min_dist < 0 || dist < min_dist) && (tree[children_ptr + i] != 0)) {
@@ -176,38 +126,19 @@ uint findClosestIntersectionIndex(Ray ray, ivec3 parent_pos, uint size, uint chi
         }
     }
 
-    if (min_dist == -1) return INVALID_INDEX;
+    if (min_dist == -1) return MAX_32;
 
     return index;
 }
 
+#define MAX_TRAVERSAL_DEPTH 256
+
 uint hitTree(Ray ray) {
-    if (hitAABB(ray, vec3(meta_data.pos), meta_data.size) < 0) return 0;
-
-    uint size = meta_data.size;
-    ivec3 node_pos = meta_data.pos;
-    uint node_ptr = meta_data_size;
-    uint parent_ptr = 0;
-
-    while (size > 2) {
-        uint children_ptr = node_ptr + node_size;
-        uint hit_index = findClosestIntersectionIndex(ray, node_pos, size, children_ptr);
-        node_ptr = tree[children_ptr + hit_index];
-
-        if (hit_index == INVALID_INDEX) return 0;
-
-        if (node_ptr == 0) return 0;
-
-        size = size / divisions;
-        node_pos = node_pos + (uvec3_ivec3(getRelativePos(hit_index) * size));
+    if (hitAABB(ray, vec3(meta_data.pos), float(meta_data.size)).x > 0) {
+        return MAX_32;
     }
 
-    uint children_ptr = node_ptr + node_size;
-    uint hit_index = findClosestIntersectionIndex(ray, node_pos, size, children_ptr);
-
-    if (hit_index == INVALID_INDEX) return 0;
-
-    return tree[children_ptr + hit_index];
+    return 0;
 }
 
 vec4 rayColor(Ray ray) {

@@ -24,6 +24,7 @@ pub fn KDTree(comptime divisions: u32) type {
         const empty_children = [_]u32{0} ** child_count;
 
         const Node = packed struct {
+            size: u32,
             value: Voxel = empty,
         };
 
@@ -58,7 +59,7 @@ pub fn KDTree(comptime divisions: u32) type {
                 .size = size,
             }))[0..]);
 
-            _ = try self.addNode();
+            _ = try self.addNode(size);
 
             return self;
         }
@@ -75,9 +76,9 @@ pub fn KDTree(comptime divisions: u32) type {
             return @alignCast(std.mem.bytesAsValue(MetaData, self.store.items[0..meta_data_size]));
         }
 
-        fn addNode(self: *Self) !u32 {
+        fn addNode(self: *Self, size: u32) !u32 {
             const ptr: u32 = @intCast(self.store.items.len);
-            try self.store.appendSlice(self.allocator, @as([node_size]u32, @bitCast(Node{}))[0..]);
+            try self.store.appendSlice(self.allocator, @as([node_size]u32, @bitCast(Node{ .size = size }))[0..]);
             try self.store.appendSlice(self.allocator, empty_children[0..]);
             return ptr;
         }
@@ -86,11 +87,11 @@ pub fn KDTree(comptime divisions: u32) type {
             return self.store.items[children_ptr + index];
         }
 
-        fn getOrAddNode(self: *Self, index: u32, children_ptr: u32) !u32 {
+        fn getOrAddNode(self: *Self, index: u32, children_ptr: u32, size: u32) !u32 {
             var ptr = self.getNodePtr(index, children_ptr);
 
             if (ptr == 0) { 
-                ptr = try self.addNode();
+                ptr = try self.addNode(@divFloor(size, divisions));
                 self.store.items[children_ptr + index] = ptr;
             }
 
@@ -118,7 +119,7 @@ pub fn KDTree(comptime divisions: u32) type {
             while (size > 2) {
                 const children_ptr = node_ptr + node_size;
                 const relative_pos = getRelativePos(node_pos, size, pos);
-                node_ptr = try self.getOrAddNode(getIndex(relative_pos), children_ptr);
+                node_ptr = try self.getOrAddNode(getIndex(relative_pos), children_ptr, size);
 
                 size = @divFloor(size, divisions);
                 node_pos = node_pos.add(relative_pos.scale(@intCast(size)));
@@ -137,7 +138,7 @@ pub fn KDTree(comptime divisions: u32) type {
             var node_pos = meta_data.getPos();
             var node_ptr = meta_data_size;
 
-            while (size > 2) {
+            while (size > divisions) {
                 const children_ptr = node_ptr + node_size;
                 const relative_pos = getRelativePos(node_pos, size, pos);
                 node_ptr = self.getNodePtr(getIndex(relative_pos), children_ptr);

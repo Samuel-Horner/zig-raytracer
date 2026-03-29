@@ -74,7 +74,7 @@ pub fn main() !void {
     quad_renderer.program.applyOwnedUniform(output_texture_uniform, &output_texture);
 
     // Init World
-    const world_size: u32 = 16;
+    const world_size: u32 = 4;
     const world_root = -@as(i32, @intCast(world_size)) / 2;
     const Tree = voxel.KDTree(2);
     var world: Tree = try Tree.init(gpa.allocator(), m.ivec3(world_root, world_root, world_root), world_size);
@@ -104,7 +104,7 @@ pub fn main() !void {
     world_ssbo.bind(0);
 
     // Init Player Camera
-    camera = Camera.init(m.vec3(0, 0, 0), .{});
+    camera = Camera.init(m.vec3(0, 0, -@as(f32, @floatFromInt(world_size))), .{});
     try camera.registerUniforms(engine.ComputeProgram, &compute_program);
     camera.applyUniforms(engine.ComputeProgram, &compute_program);
 
