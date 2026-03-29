@@ -25,13 +25,15 @@ pub fn KDTree(comptime divisions: usize) !type {
         const child_count = divisions * divisions * divisions;
 
         const Children = [child_count]u16;
-        const empty_children = [_]u16{0} ** child_count;
+        const empty_children = [_]u16{@as(u16, @bitCast(empty))} ** child_count;
 
-        const Node = extern struct {
+        const Node = packed struct {
             value: Voxel = empty,
         };
 
-        const Root = extern struct {
+        const node_size = @bitSizeOf(Node) / 16;
+
+        const Root = packed struct {
             x: i32,
             y: i32,
             z: i32,
@@ -39,8 +41,10 @@ pub fn KDTree(comptime divisions: usize) !type {
             size: u32,
         };
 
+        const root_size = @bitSizeOf(Root) / 16;
+
         allocator: std.mem.Allocator,
-        store: std.ArrayList(u8) = .empty,
+        store: std.ArrayList(u16) = .empty,
 
         const Self = @This();
 
@@ -57,7 +61,7 @@ pub fn KDTree(comptime divisions: usize) !type {
                 i >>= inc;
             }
 
-            try self.store.appendSlice(self.allocator, @as([@sizeOf(Root)]u8, @bitCast(Root{
+            try self.store.appendSlice(self.allocator, @as([root_size]u16, @bitCast(Root{
                 .x = root_pos.data[0],
                 .y = root_pos.data[1],
                 .z = root_pos.data[2],
@@ -65,7 +69,7 @@ pub fn KDTree(comptime divisions: usize) !type {
                 .depth = max_depth,
             }))[0..]);
 
-            try self.store.appendSlice(self.allocator, @as([@sizeOf(Children)]u8, @bitCast(empty_children))[0..]);
+            try self.store.appendSlice(self.allocator, empty_children[0..]);
 
             return self;
         }
@@ -75,36 +79,32 @@ pub fn KDTree(comptime divisions: usize) !type {
         }
 
         fn getRoot(self: *Self) *Root {
-            return @alignCast(std.mem.bytesAsValue(Root, self.store.items[0..@sizeOf(Root)]));
+            return @alignCast(std.mem.bytesAsValue(Root, self.store.items[0..root_size]));
         }
 
         fn getNode(self: *Self, ptr: u16) *Node {
-            return @alignCast(std.mem.bytesAsValue(Node, self.store.items[ptr .. ptr + @sizeOf(Node)]));
+            return @alignCast(std.mem.bytesAsValue(Node, self.store.items[ptr .. ptr + node_size]));
         }
 
-        fn getNodePtr(pos: m.iVec3, children: []u16) u16 {
-            return children[Self.getIndex(pos)];
+        fn getNodePtr(self: *Self, index: usize, children_start: usize) u16 {
+            const children = self.store.items[children_start .. children_start + child_count];
+            return children[index];
         }
 
         fn addNode(self: *Self) !u16 {
             const ptr = self.store.items.len;
-            try self.store.appendSlice(self.allocator, @as([@sizeOf(Node)]u8, @bitCast(Node{}))[0..]);
-            try self.store.appendSlice(self.allocator, @as([@sizeOf(Children)]u8, @bitCast(empty_children))[0..]);
+            try self.store.appendSlice(self.allocator, @as([node_size]u16, @bitCast(Node{}))[0..]);
+            try self.store.appendSlice(self.allocator, empty_children[0..]);
             return @intCast(ptr);
         }
 
         fn addOrGetNodePtr(self: *Self, index: usize, children_start: usize) !u16 {
-            var children = std.mem.bytesAsSlice(u16, self.store.items[children_start .. children_start + @sizeOf(Children)]);
-            debug.log("Index: {}", .{index});
+            var children = self.store.items[children_start .. children_start + child_count];
             var ptr = children[index];
-
-            debug.log("Length: {}", .{children.len});
-
-            debug.log("Children PTR: {}", .{@intFromPtr(children.ptr)});
 
             if (ptr == 0) {
                 ptr = try self.addNode();
-                children = std.mem.bytesAsSlice(u16, self.store.items[children_start .. children_start + @sizeOf(Children)]);
+                children = self.store.items[children_start .. children_start + child_count];
                 children[index] = ptr;
             }
 
@@ -112,8 +112,6 @@ pub fn KDTree(comptime divisions: usize) !type {
         }
 
         fn getChildPosition(node_pos: m.iVec3, size: u32, pos: m.iVec3) m.iVec3 {
-            debug.log("Pos: {any} - Node: {any}", .{ pos, node_pos });
-
             const relative_pos = pos.sub(node_pos);
             const scale: u5 = @intCast(std.math.log2(size / divisions));
 
@@ -127,7 +125,7 @@ pub fn KDTree(comptime divisions: usize) !type {
         pub fn add(self: *Self, pos: m.iVec3, voxel: Voxel) !void {
             const root = self.getRoot();
             var node_pos = m.ivec3(root.x, root.y, root.z);
-            var children_start: usize = @sizeOf(Root);
+            var children_start: usize = root_size;
             var size = root.size;
             const inc: u5 = @intCast(std.math.log2(divisions));
 
@@ -135,7 +133,7 @@ pub fn KDTree(comptime divisions: usize) !type {
                 const child_pos = Self.getChildPosition(node_pos, size, pos);
                 const ptr = try self.addOrGetNodePtr(Self.getIndex(child_pos), children_start);
 
-                children_start = ptr + @sizeOf(Node);
+                children_start = ptr + node_size;
                 size >>= inc;
 
                 node_pos = node_pos.add(child_pos.scale(divisions));
@@ -146,8 +144,34 @@ pub fn KDTree(comptime divisions: usize) !type {
 
             const voxel_data: u16 = @bitCast(voxel);
 
-            const children = std.mem.bytesAsSlice(u16, self.store.items[children_start .. children_start + @sizeOf(Children)]);
+            const children = self.store.items[children_start .. children_start + child_count];
             children[index] = voxel_data;
+        }
+
+        pub fn get(self: *Self, pos: m.iVec3) Voxel {
+            const root = self.getRoot();
+            var node_pos = m.ivec3(root.x, root.y, root.z);
+            var children_start: usize = root_size;
+            var size = root.size;
+            const inc: u5 = @intCast(std.math.log2(divisions));
+
+            for (0..root.depth) |_| {
+                const child_pos = Self.getChildPosition(node_pos, size, pos);
+                const ptr = self.getNodePtr(Self.getIndex(child_pos), children_start);
+
+                if (ptr == 0) { return empty; }
+
+                children_start = ptr + node_size;
+                size >>= inc;
+
+                node_pos = node_pos.add(child_pos.scale(divisions));
+            }
+
+            const relative_voxel_pos = pos.sub(node_pos);
+            const index = Self.getIndex(relative_voxel_pos);
+
+            const children = self.store.items[children_start .. children_start + child_count];
+            return std.mem.bytesToValue(Voxel, &children[index]);
         }
 
         pub fn deinit(self: *Self) void {

@@ -61,6 +61,9 @@ pub fn main() !void {
 
     debug.log("{any}", .{tree.store});
 
+    debug.log("{any}", .{tree.get(m.ivec3(8, 8, 8))});
+    debug.log("{any}", .{tree.get(m.ivec3(8, 8, 9))});
+
     try engine.init(gpa.allocator(), 800, 460, "Hello World");
     defer engine.deinit();
 
