@@ -70,7 +70,7 @@ pub const Camera = struct {
     }
 
     pub fn tick(self: *Camera, delta_time: f32) void {
-        const forward = m.vec3(- self.dir.data[0], 0, - self.dir.data[2]);
+        const forward = m.vec3(- self.dir.data[0], 0, - self.dir.data[2]).norm();
         var movement = m.vec3(0, 0, 0);
         var speed: f32 = 10.0;
 

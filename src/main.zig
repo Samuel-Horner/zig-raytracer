@@ -74,7 +74,7 @@ pub fn main() !void {
     quad_renderer.program.applyOwnedUniform(output_texture_uniform, &output_texture);
 
     // Init World
-    const world_size: u32 = 4;
+    const world_size: u32 = 256;
     const world_root = -@as(i32, @intCast(world_size)) / 2;
     const Tree = voxel.KDTree(2);
     var world: Tree = try Tree.init(gpa.allocator(), m.ivec3(world_root, world_root, world_root), world_size);
@@ -95,9 +95,14 @@ pub fn main() !void {
             }
         }
     }
+    
+    // try world.add(m.ivec3(-2, -2, -2), voxel.Voxel.init(0, 0, 255));
+    // try world.add(m.ivec3(-1, -1, -1), voxel.Voxel.init(0, 255, 0));
+    // try world.add(m.ivec3(0, 0, 0), voxel.Voxel.init(255, 255, 255));
+    // try world.add(m.ivec3(1, 1, 1), voxel.Voxel.init(255, 0, 0));
 
-    debug.log("{any}", .{world.get(m.ivec3(-2, -2, -2))});
-    debug.log("{any}", .{@as(u32, @bitCast(try world.get(m.ivec3(-2, -2, -2))))});
+    debug.log("{any}", .{world.get(m.ivec3(0, 0, 0))});
+    debug.log("{any}", .{@as(u32, @bitCast(try world.get(m.ivec3(0, 0, 0))))});
 
     const world_ssbo = engine.SSBO.init(u32, world.store.items);
     compute_program.use();

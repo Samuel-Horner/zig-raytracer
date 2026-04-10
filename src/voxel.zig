@@ -151,7 +151,7 @@ pub fn KDTree(comptime divisions: u32) type {
 
             const chilren_ptr = node_ptr + node_size;
             const relative_pos = getRelativePos(node_pos, size, pos);
-
+            
             return std.mem.bytesToValue(Voxel, &self.store.items[chilren_ptr + getIndex(relative_pos)]);
         }
     };

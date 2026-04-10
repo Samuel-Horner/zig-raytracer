@@ -20,6 +20,20 @@ uvec3 ivec3_uvec3(ivec3 x) {
     return uvec3(uint(x.x), uint(x.y), uint(x.z));
 }
 
+int divFloor(int num, int denum) {
+    return int(floor(float(num) / float(denum)));
+}
+
+uint udivFloor(uint num, uint denum) {
+    return uint(floor(float(num) / float(denum)));
+}
+
+ivec3 ivec3Floor(vec3 v) {
+    return ivec3(floor(v));
+}
+
+#define empty 0
+
 #define divisions 2
 #define child_count divisions * divisions * divisions
 
@@ -29,7 +43,7 @@ struct MetaData {
 };
 
 #define meta_data_size 4
-#define node_size 1
+#define node_size 2
 
 MetaData getMetaData() {
     return MetaData(
@@ -40,24 +54,54 @@ MetaData getMetaData() {
 
 MetaData meta_data = getMetaData();
 
-uint getIndex(uvec3 pos) {
+uint getIndex(ivec3 pos) {
     return pos.x * divisions * divisions + pos.y * divisions + pos.z;
 }
 
-uvec3 getRelativePos(uint index) {
-    return uvec3(
+ivec3 getRelativePos(uint index) {
+    return ivec3(
         index / (divisions * divisions),
         (index % (divisions * divisions)) / divisions,
         index % divisions
     );
 }
 
-uvec3 getPos(ivec3 parent_pos, uint index) {
-    return uvec3(uint(parent_pos.x), uint(parent_pos.y), uint(parent_pos.z)) + getRelativePos(index);
+ivec3 getRelativeNodePos(ivec3 abs_pos, uint size, ivec3 voxel_pos) {
+    float division_size = float(size) / divisions;
+    vec3 node_space_pos = vec3(voxel_pos - abs_pos);
+
+    return ivec3Floor(node_space_pos / division_size);
 }
 
-uint getVoxel(ivec3 pos) {
-    return 0;
+ivec3 getPos(ivec3 parent_pos, uint index) {
+    return parent_pos + getRelativePos(index);
+}
+
+uint getNodePtr(uint index, uint children_ptr) {
+    return tree[children_ptr + index];
+}
+
+// Returns uvec2(voxel, size)
+uvec2 getVoxel(ivec3 pos) {
+    uint size = meta_data.size;
+    ivec3 node_pos = meta_data.pos;
+    uint node_ptr = meta_data_size;
+
+    while (size > divisions) {
+        uint children_ptr = node_ptr + node_size;
+        ivec3 relative_pos = getRelativeNodePos(node_pos, size, pos);
+        node_ptr = getNodePtr(getIndex(relative_pos), children_ptr);
+
+        if (node_ptr == 0) return uvec2(empty, size);
+
+        size = udivFloor(size, divisions);
+        node_pos = node_pos + relative_pos * int(size);
+    }
+
+    uint children_ptr = node_ptr + node_size;
+    ivec3 relative_pos = getRelativeNodePos(node_pos, size, pos);
+
+    return uvec2(tree[children_ptr + getIndex(relative_pos)], 1);
 }
 
 uniform vec3 cam_pos;
@@ -92,58 +136,50 @@ vec2 hitAABB(Ray ray, vec3 vmin, float size) {
     float tnear = max(max(t1.x, t1.y), t1.z);
     float tfar = min(min(t2.x, t2.y), t2.z);
 
-    if (tnear > 0 && tfar - tnear > 0) {
-        return vec2(tnear, tfar);
-    } else {
-        return vec2(-1.);
-    }
+    return vec2(max(tnear, 0), tfar);
+    // if (tfar - tnear > 0) {
+    //     return vec2(tnear, tfar);
+    // } else {
+    //     return vec2(-1.);
+    // }
 }
 
 #define MAX_32 0xFFFFFF
+#define MAX_TRAVERSAL_DEPTH 16
+#define OFFSET 0.0001
 
-uint findClosestIntersectionIndex(Ray ray, ivec3 parent_pos, uint size, uint children_ptr) {
-    uint division_size = size / divisions;
-    vec2 hit_dists[child_count];
+uint hitTree(Ray ray) {
+    uint hit_count = 0;
 
-    for (uint i = 0; i < child_count; i++) {
-        uvec3 relative_pos = getRelativePos(i);
-        ivec3 node_pos = parent_pos + uvec3_ivec3(relative_pos * division_size);
+    vec2 hit_tree = hitAABB(ray, vec3(meta_data.pos), float(meta_data.size));
 
-        hit_dists[i] = hitAABB(ray, node_pos, division_size);
-    }
+    if (hit_tree.y - hit_tree.x <= 0) { return empty; }
 
-    // Return minimum distance index
-    uint index = 0;
-    float min_dist = -1;
+    float next = hit_tree.x;
+    float max = hit_tree.y;
 
-    for (uint i = 0; i < divisions * divisions * divisions; i++) {
-        float dist = hit_dists[i].x;
-        if (dist < 0) continue;
+    for (uint i = 0; i < MAX_TRAVERSAL_DEPTH; i++) {
+        ivec3 voxel_pos = ivec3Floor(at(ray, next + OFFSET));
+        uvec2 voxel = getVoxel(voxel_pos);
 
-        if ((min_dist < 0 || dist < min_dist) && (tree[children_ptr + i] != 0)) {
-            min_dist = dist;
-            index = i;
+        if (voxel.x != empty) {
+            return voxel.x;
+        }
+
+        vec2 hit = hitAABB(ray, vec3(voxel_pos), float(1));
+        next = hit.y;
+
+        if (next + OFFSET >= max) {
+            break;
         }
     }
 
-    if (min_dist == -1) return MAX_32;
-
-    return index;
-}
-
-#define MAX_TRAVERSAL_DEPTH 256
-
-uint hitTree(Ray ray) {
-    if (hitAABB(ray, vec3(meta_data.pos), float(meta_data.size)).x > 0) {
-        return MAX_32;
-    }
-
-    return 0;
+    return empty;
 }
 
 vec4 rayColor(Ray ray) {
     uint voxel = hitTree(ray);
-    if (voxel != 0) {
+    if (voxel != empty) {
         const vec3 col = vec3(
                 (voxel) & uint(0xFF),
                 (voxel >> 8) & uint(0xFF),
