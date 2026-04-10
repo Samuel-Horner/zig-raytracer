@@ -145,7 +145,7 @@ vec2 hitAABB(Ray ray, vec3 vmin, float size) {
 }
 
 #define MAX_32 0xFFFFFF
-#define MAX_TRAVERSAL_DEPTH 16
+#define MAX_TRAVERSAL_DEPTH 256
 #define OFFSET 0.0001
 
 uint hitTree(Ray ray) {

@@ -39,6 +39,17 @@ pub const Window = struct {
     pub fn close(self: *const Window) void {
         glfw.setWindowShouldClose(self.id, true);
     }
+
+    pub fn toggleFullScreen(self: *const Window) void {
+        if (glfw.getWindowMonitor(self.id) == null) {
+            const monitor = glfw.getPrimaryMonitor();
+            const mode = glfw.getVideoMode(monitor);
+
+            glfw.setWindowMonitor(self.id, monitor, 0, 0, mode.?.width, mode.?.height, mode.?.refreshRate);
+        } else {
+            glfw.setWindowMonitor(self.id, null, 0, 0, 800, 460, 0);
+        }
+    }
 };
 
 // Allows for uniform function declaration with struct ownership.
@@ -422,6 +433,8 @@ pub fn init(allocator: std.mem.Allocator, window_width: c_int, window_height: c_
     // Create Window
     window = try Window.init(window_width, window_height, name);
     window.makeCurrent();
+
+    glfw.swapInterval(0);
 
     _ = glfw.setFramebufferSizeCallback(window.id, glfwGlobalFrameBufferSizeCallback);
 

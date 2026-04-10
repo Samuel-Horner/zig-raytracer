@@ -74,7 +74,7 @@ pub fn main() !void {
     quad_renderer.program.applyOwnedUniform(output_texture_uniform, &output_texture);
 
     // Init World
-    const world_size: u32 = 256;
+    const world_size: u32 = 4;
     const world_root = -@as(i32, @intCast(world_size)) / 2;
     const Tree = voxel.KDTree(2);
     var world: Tree = try Tree.init(gpa.allocator(), m.ivec3(world_root, world_root, world_root), world_size);
@@ -118,6 +118,10 @@ pub fn main() !void {
     engine.glfwSetCursorPosCallback(cursorCallback);
 
     var frame_timer = try std.time.Timer.start();
+    var debug_info_timer = try std.time.Timer.start();
+    var frame_count: u32 = 0;
+
+    var f11_down: bool = false;
 
     while (!engine.window.shouldClose()) {
         const delta_time: f32 = @as(f32, @floatFromInt(frame_timer.lap())) / 1e9;
@@ -136,5 +140,21 @@ pub fn main() !void {
         quad_renderer.render();
 
         engine.finishRender();
+
+        frame_count += 1;
+        if (debug_info_timer.read() > 1e9) {
+            debug.log("FPS: {}", .{frame_count});
+            frame_count = 0;
+            _ = debug_info_timer.lap();
+        }
+
+        if (engine.window.keyPressed(glfw.KeyF11)) {
+            if (!f11_down) {
+                engine.window.toggleFullScreen();
+                f11_down = true;
+            }
+        } else {
+            f11_down = false;
+        }
     }
 }
